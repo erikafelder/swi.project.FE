@@ -6,8 +6,8 @@ interface User {
     email: string
     firstName: string
     id: string
+    role: string
     lastName: string
-    password: string
     username: string
 }
 
@@ -29,7 +29,7 @@ function Users() {
         const fetchUsers = async () => {
             setIsLoading(true)
             try {
-                const response = await fetch('/api/test/users')
+                const response = await fetch('http://localhost:8080/api/users')
                 if (!response.ok) throw new Error(`Request failed with status ${response.status}`)
                 const data = await response.json()
                 setUsersData(Array.isArray(data) ? data : [data])
