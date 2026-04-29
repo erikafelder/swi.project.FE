@@ -1,127 +1,143 @@
-import { useEffect, useState } from 'react'
-import { Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Button } from '@mui/material'
-
-interface User {
-    age: number
-    email: string
-    firstName: string
-    id: string
-    role: string
-    lastName: string
-    username: string
-}
+import { useEffect, useState } from 'react';
+import {
+    Table, TableBody, TableCell, TableContainer, TableHead,
+    TableRow, Paper, Button, Typography, Box
+} from '@mui/material';
 
 interface Book {
-    id: number
-    title: string
+    id: string;
+    title: string;
+    author?: { name: string };
 }
 
-function Users() {
-    const [usersData, setUsersData] = useState<User[]>([])
-    const [isLoading, setIsLoading] = useState(true)
-    const [errorMessage, setErrorMessage] = useState('')
-    const [selectedUser, setSelectedUser] = useState<User | null>(null)
-    const [books, setBooks] = useState<Book[]>([])
+interface User {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+}
 
-    const columns = ['id', 'firstName', 'lastName', 'email', 'username', 'age']
+const Users = () => {
+    const [users, setUsers] = useState<User[]>([]);
+    const [selectedUserBooks, setSelectedUserBooks] = useState<Book[]>([]);
+    const [selectedUserName, setSelectedUserName] = useState<string>('');
+    const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+
+    const fetchUsers = () => {
+        fetch('http://localhost:8080/api/users')
+            .then(res => res.json())
+            .then(data => setUsers(data))
+            .catch(err => console.error(err));
+    };
 
     useEffect(() => {
-        const fetchUsers = async () => {
-            setIsLoading(true)
-            try {
-                const response = await fetch('http://localhost:8080/api/users')
-                if (!response.ok) throw new Error(`Request failed with status ${response.status}`)
-                const data = await response.json()
-                setUsersData(Array.isArray(data) ? data : [data])
-            } catch (error) {
-                setErrorMessage(error instanceof Error ? error.message : 'Unknown error')
-            } finally {
-                setIsLoading(false)
-            }
-        }
-        void fetchUsers()
-    }, [])
+        fetchUsers();
+    }, []);
 
-    const fetchBooks = async (user: User) => {
-        setSelectedUser(user)
+    const handleShowBooks = async (userId: string, firstName: string, lastName: string) => {
         try {
-            const response = await fetch(`/api/loans/user/${user.id}`)
-            if (!response.ok) throw new Error(`Request failed with status ${response.status}`)
-            const data = await response.json()
-            setBooks(Array.isArray(data) ? data : [])
-        } catch  {
-            setBooks([])
+            const response = await fetch(`http://localhost:8080/api/loans/user/${userId}`);
+            if (response.ok) {
+                const books = await response.json();
+                setSelectedUserBooks(books);
+                setSelectedUserName(`${firstName} ${lastName}`);
+                setSelectedUserId(userId);
+            }
+        } catch (err) {
+            console.error(err);
         }
-    }
+    };
+
+    const handleReturnBook = async (bookId: string) => {
+        const response = await fetch(`http://localhost:8080/api/books/${bookId}/loan/return`, {
+            method: 'POST'
+        });
+        if (response.ok && selectedUserId) {
+            handleShowBooks(selectedUserId, selectedUserName.split(' ')[0], selectedUserName.split(' ')[1]);
+        }
+    };
 
     return (
-        <div className="page">
-            <header className="page-header">
-                <h1>Users</h1>
-            </header>
-            {errorMessage && <div className="error">{errorMessage}</div>}
-            {isLoading ? (
-                <div>Loading...</div>
-            ) : (
-                <TableContainer component={Paper}>
-                    <Table>
-                        <TableHead>
-                            <TableRow>
-                                {columns.map((column) => (
-                                    <TableCell key={column}>{column}</TableCell>
-                                ))}
-                                <TableCell>Půjčené knihy</TableCell>
-                            </TableRow>
-                        </TableHead>
-                        <TableBody>
-                            {usersData.map((user) => (
-                                <TableRow key={user.id}>
-                                    {columns.map((column) => (
-                                        <TableCell key={`${user.id}-${column}`}>
-                                            {String(user[column as keyof User])}
-                                        </TableCell>
-                                    ))}
-                                    <TableCell>
-                                        <Button onClick={() => fetchBooks(user)}>
-                                            Zobraz knihy
-                                        </Button>
-                                    </TableCell>
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-                </TableContainer>
-            )}
+        <Box sx={{ p: 2 }}>
+            <Typography variant="h4" gutterBottom sx={{ fontWeight: 'bold', color: '#5D4037' }}>
+                Správa čtenářů
+            </Typography>
 
-            {selectedUser && (
-                <div style={{ marginTop: '32px' }}>
-                    <h2>Půjčené knihy uživatele {selectedUser.firstName}</h2>
-                    {books.length === 0 ? (
-                        <p>Žádné půjčené knihy</p>
-                    ) : (
-                        <TableContainer component={Paper}>
-                            <Table>
-                                <TableHead>
+            <TableContainer component={Paper} sx={{ mb: 4, boxShadow: 3 }}>
+                <Table>
+                    <TableHead sx={{ backgroundColor: '#D7CCC8' }}>
+                        <TableRow>
+                            <TableCell><strong>Jméno</strong></TableCell>
+                            <TableCell><strong>Příjmení</strong></TableCell>
+                            <TableCell><strong>Email</strong></TableCell>
+                            <TableCell align="center"><strong>Akce</strong></TableCell>
+                        </TableRow>
+                    </TableHead>
+                    <TableBody>
+                        {users.map((user) => (
+                            <TableRow key={user.id} hover>
+                                <TableCell>{user.firstName}</TableCell>
+                                <TableCell>{user.lastName}</TableCell>
+                                <TableCell>{user.email}</TableCell>
+                                <TableCell align="center">
+                                    <Button
+                                        variant="contained"
+                                        size="small"
+                                        sx={{ backgroundColor: '#5D4037', '&:hover': { backgroundColor: '#4E342E' } }}
+                                        onClick={() => handleShowBooks(user.id, user.firstName, user.lastName)}
+                                    >
+                                        Zobraz knihy
+                                    </Button>
+                                </TableCell>
+                            </TableRow>
+                        ))}
+                    </TableBody>
+                </Table>
+            </TableContainer>
+
+            {selectedUserName && (
+                <Box sx={{ mt: 4, p: 2, borderTop: '2px solid #5D4037', backgroundColor: '#FDFCF6' }}>
+                    <Typography variant="h5" gutterBottom sx={{ color: '#5D4037' }}>
+                        Vypůjčené knihy: <strong>{selectedUserName}</strong>
+                    </Typography>
+
+                    {selectedUserBooks.length > 0 ? (
+                        <TableContainer component={Paper} sx={{ maxWidth: 600, boxShadow: 2 }}>
+                            <Table size="small">
+                                <TableHead sx={{ backgroundColor: '#EFEBE9' }}>
                                     <TableRow>
-                                        <TableCell>ID</TableCell>
-                                        <TableCell>Název</TableCell>
+                                        <TableCell><strong>Název knihy</strong></TableCell>
+                                        <TableCell><strong>Autor</strong></TableCell>
+                                        <TableCell align="right"><strong>Akce</strong></TableCell>
                                     </TableRow>
                                 </TableHead>
                                 <TableBody>
-                                    {books.map((book) => (
+                                    {selectedUserBooks.map((book) => (
                                         <TableRow key={book.id}>
-                                            <TableCell>{book.id}</TableCell>
                                             <TableCell>{book.title}</TableCell>
+                                            <TableCell>{book.author ? book.author.name : 'Neznámý'}</TableCell>
+                                            <TableCell align="right">
+                                                <Button
+                                                    size="small"
+                                                    variant="outlined"
+                                                    color="secondary"
+                                                    onClick={() => handleReturnBook(book.id)}
+                                                >
+                                                    Vrátit
+                                                </Button>
+                                            </TableCell>
                                         </TableRow>
                                     ))}
                                 </TableBody>
                             </Table>
                         </TableContainer>
+                    ) : (
+                        <Typography sx={{ fontStyle: 'italic' }}>Tento člověk nemá nic půjčeného.</Typography>
                     )}
-                </div>
+                </Box>
             )}
-        </div>
-    )
-}
+        </Box>
+    );
+};
 
-export default Users
+export default Users;
