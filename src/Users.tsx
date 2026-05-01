@@ -1,13 +1,20 @@
 import { useEffect, useState } from 'react';
 import {
     Table, TableBody, TableCell, TableContainer, TableHead,
-    TableRow, Paper, Button, Typography, Box
+    TableRow, Paper, Button, Typography, Box, Chip
 } from '@mui/material';
 
-interface Book {
-    id: string;
-    title: string;
-    author?: { name: string };
+interface Loan {
+    id: number;
+    loanDate: string;
+    dueDate: string;
+    returnDate: string | null;
+    fineAmount: number;
+    book: {
+        id: number;
+        title: string;
+        authors?: { name: string }[];
+    };
 }
 
 interface User {
@@ -19,7 +26,7 @@ interface User {
 
 const Users = () => {
     const [users, setUsers] = useState<User[]>([]);
-    const [selectedUserBooks, setSelectedUserBooks] = useState<Book[]>([]);
+    const [selectedUserLoans, setSelectedUserLoans] = useState<Loan[]>([]);
     const [selectedUserName, setSelectedUserName] = useState<string>('');
     const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
 
@@ -34,12 +41,12 @@ const Users = () => {
         fetchUsers();
     }, []);
 
-    const handleShowBooks = async (userId: string, firstName: string, lastName: string) => {
+    const handleShowLoans = async (userId: string, firstName: string, lastName: string) => {
         try {
             const response = await fetch(`http://localhost:8080/api/loans/user/${userId}`);
             if (response.ok) {
-                const books = await response.json();
-                setSelectedUserBooks(books);
+                const loans = await response.json();
+                setSelectedUserLoans(loans);
                 setSelectedUserName(`${firstName} ${lastName}`);
                 setSelectedUserId(userId);
             }
@@ -48,12 +55,18 @@ const Users = () => {
         }
     };
 
-    const handleReturnBook = async (bookId: string) => {
+    const handleReturnBook = async (bookId: number) => {
         const response = await fetch(`http://localhost:8080/api/books/${bookId}/loan/return`, {
             method: 'POST'
         });
         if (response.ok && selectedUserId) {
-            handleShowBooks(selectedUserId, selectedUserName.split(' ')[0], selectedUserName.split(' ')[1]);
+            const loan: Loan = await response.json();
+            if (loan.fineAmount && loan.fineAmount > 0) {
+                alert(`Kniha vrácena! Pokuta za pozdní vrácení: ${loan.fineAmount} Kč`);
+            } else {
+                alert('Kniha úspěšně vrácena!');
+            }
+            handleShowLoans(selectedUserId, selectedUserName.split(' ')[0], selectedUserName.split(' ')[1]);
         }
     };
 
@@ -84,9 +97,9 @@ const Users = () => {
                                         variant="contained"
                                         size="small"
                                         sx={{ backgroundColor: '#5D4037', '&:hover': { backgroundColor: '#4E342E' } }}
-                                        onClick={() => handleShowBooks(user.id, user.firstName, user.lastName)}
+                                        onClick={() => handleShowLoans(user.id, user.firstName, user.lastName)}
                                     >
-                                        Zobraz knihy
+                                        Zobraz výpůjčky
                                     </Button>
                                 </TableCell>
                             </TableRow>
@@ -98,36 +111,47 @@ const Users = () => {
             {selectedUserName && (
                 <Box sx={{ mt: 4, p: 2, borderTop: '2px solid #5D4037', backgroundColor: '#FDFCF6' }}>
                     <Typography variant="h5" gutterBottom sx={{ color: '#5D4037' }}>
-                        Vypůjčené knihy: <strong>{selectedUserName}</strong>
+                        Výpůjčky: <strong>{selectedUserName}</strong>
                     </Typography>
 
-                    {selectedUserBooks.length > 0 ? (
-                        <TableContainer component={Paper} sx={{ maxWidth: 600, boxShadow: 2 }}>
+                    {selectedUserLoans.filter(l => !l.returnDate).length > 0 ? (
+                        <TableContainer component={Paper} sx={{ maxWidth: 800, boxShadow: 2 }}>
                             <Table size="small">
                                 <TableHead sx={{ backgroundColor: '#EFEBE9' }}>
                                     <TableRow>
-                                        <TableCell><strong>Název knihy</strong></TableCell>
-                                        <TableCell><strong>Autor</strong></TableCell>
+                                        <TableCell><strong>Kniha</strong></TableCell>
+                                        <TableCell><strong>Půjčeno</strong></TableCell>
+                                        <TableCell><strong>Vrátit do</strong></TableCell>
+                                        <TableCell><strong>Stav</strong></TableCell>
                                         <TableCell align="right"><strong>Akce</strong></TableCell>
                                     </TableRow>
                                 </TableHead>
                                 <TableBody>
-                                    {selectedUserBooks.map((book) => (
-                                        <TableRow key={book.id}>
-                                            <TableCell>{book.title}</TableCell>
-                                            <TableCell>{book.author ? book.author.name : 'Neznámý'}</TableCell>
-                                            <TableCell align="right">
-                                                <Button
-                                                    size="small"
-                                                    variant="outlined"
-                                                    color="secondary"
-                                                    onClick={() => handleReturnBook(book.id)}
-                                                >
-                                                    Vrátit
-                                                </Button>
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
+                                    {selectedUserLoans
+                                        .filter(l => !l.returnDate)
+                                        .map((loan) => (
+                                            <TableRow key={loan.id}>
+                                                <TableCell>{loan.book.title}</TableCell>
+                                                <TableCell>{loan.loanDate}</TableCell>
+                                                <TableCell>{loan.dueDate}</TableCell>
+                                                <TableCell>
+                                                    {new Date(loan.dueDate) < new Date()
+                                                        ? <Chip label="PO TERMÍNU" color="error" size="small" />
+                                                        : <Chip label="V pořádku" color="success" size="small" />
+                                                    }
+                                                </TableCell>
+                                                <TableCell align="right">
+                                                    <Button
+                                                        size="small"
+                                                        variant="outlined"
+                                                        color="secondary"
+                                                        onClick={() => handleReturnBook(loan.book.id)}
+                                                    >
+                                                        Vrátit
+                                                    </Button>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
                                 </TableBody>
                             </Table>
                         </TableContainer>

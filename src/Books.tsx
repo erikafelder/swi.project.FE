@@ -4,11 +4,16 @@ import {
     TableRow, Paper, Button, Typography, Box, TextField, Chip
 } from '@mui/material';
 
+interface Author {
+    id: number;
+    name: string;
+}
+
 interface Book {
     id: number;
     title: string;
     isbn: string;
-    author?: { name: string };
+    authors?: Author[];
     loaned?: boolean;
 }
 
@@ -87,7 +92,7 @@ const Books = ({ isAdmin, currentUserId }: BooksProps) => {
         await fetch(`http://localhost:8080/api/books/${bookId}/loan/${userId}`, {
             method: 'POST'
         });
-        alert('Kniha byla úspěšně půjčena!');
+        alert('Kniha byla úspěšně půjčena! Vrátit do 14 dní.');
         fetchBooks();
     };
 
@@ -101,7 +106,7 @@ const Books = ({ isAdmin, currentUserId }: BooksProps) => {
     const filteredBooks = books
         .filter(book =>
             book.title.toLowerCase().includes(search.toLowerCase()) ||
-            (book.author?.name ?? '').toLowerCase().includes(search.toLowerCase())
+            (book.authors?.some(a => a.name.toLowerCase().includes(search.toLowerCase())) ?? false)
         )
         .sort((a, b) => a.title.localeCompare(b.title, 'cs'));
 
@@ -136,7 +141,7 @@ const Books = ({ isAdmin, currentUserId }: BooksProps) => {
                     <TableHead sx={{ backgroundColor: '#D7CCC8' }}>
                         <TableRow>
                             <TableCell><strong>Název</strong></TableCell>
-                            <TableCell><strong>Autor</strong></TableCell>
+                            <TableCell><strong>Autor(i)</strong></TableCell>
                             <TableCell><strong>Stav</strong></TableCell>
                             <TableCell align="center"><strong>Akce</strong></TableCell>
                         </TableRow>
@@ -145,7 +150,11 @@ const Books = ({ isAdmin, currentUserId }: BooksProps) => {
                         {filteredBooks.map((book) => (
                             <TableRow key={book.id} hover>
                                 <TableCell>{book.title}</TableCell>
-                                <TableCell>{book.author ? book.author.name : 'Neznámý'}</TableCell>
+                                <TableCell>
+                                    {book.authors && book.authors.length > 0
+                                        ? book.authors.map(a => a.name).join(', ')
+                                        : 'Neznámý'}
+                                </TableCell>
                                 <TableCell>
                                     {book.loaned
                                         ? <Chip label="ZAPŮJČENO" color="error" size="small" />
