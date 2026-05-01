@@ -1,103 +1,202 @@
 import { useEffect, useState } from 'react';
 import {
-    Table, TableBody, TableCell, TableContainer, TableHead,
-    TableRow, Paper, Button, Typography, Box, Chip
+    Box,
+    Button,
+    Chip,
+    Paper,
+    Table,
+    TableBody,
+    TableCell,
+    TableContainer,
+    TableHead,
+    TableRow,
+    Typography
 } from '@mui/material';
+
+interface User {
+    id: string;
+    username?: string;
+    firstName: string;
+    lastName: string;
+    email?: string;
+    role: string;
+}
+
+interface Book {
+    id: number;
+    title: string;
+}
 
 interface Loan {
     id: number;
     loanDate: string;
     dueDate: string;
-    returnDate: string | null;
-    fineAmount: number;
-    book: {
-        id: number;
-        title: string;
-        authors?: { name: string }[];
-    };
+    returnDate?: string | null;
+    fineAmount?: number | null;
+    book?: Book;
 }
 
-interface User {
-    id: string;
-    firstName: string;
-    lastName: string;
-    email: string;
+interface UsersProps {
+    currentUser: User;
+    isAdmin: boolean;
 }
 
-const Users = () => {
+function Users({ currentUser, isAdmin }: UsersProps) {
     const [users, setUsers] = useState<User[]>([]);
-    const [selectedUserLoans, setSelectedUserLoans] = useState<Loan[]>([]);
-    const [selectedUserName, setSelectedUserName] = useState<string>('');
-    const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
-
-    const fetchUsers = () => {
-        fetch('http://localhost:8080/api/users')
-            .then(res => res.json())
-            .then(data => setUsers(data))
-            .catch(err => console.error(err));
-    };
+    const [loans, setLoans] = useState<Loan[]>([]);
+    const [selectedUser, setSelectedUser] = useState<User | null>(null);
 
     useEffect(() => {
         fetchUsers();
-    }, []);
 
-    const handleShowLoans = async (userId: string, firstName: string, lastName: string) => {
+        if (!isAdmin) {
+            setSelectedUser(currentUser);
+            fetchLoans(currentUser.id);
+        }
+    }, [currentUser, isAdmin]);
+
+    const fetchUsers = async () => {
+        try {
+            const response = await fetch('http://localhost:8080/api/users');
+
+            if (!response.ok) {
+                throw new Error('Nepodařilo se načíst čtenáře.');
+            }
+
+            const data: User[] = await response.json();
+            setUsers(data);
+        } catch (error) {
+            console.error('Chyba při načítání čtenářů:', error);
+        }
+    };
+
+    const fetchLoans = async (userId: string) => {
         try {
             const response = await fetch(`http://localhost:8080/api/loans/user/${userId}`);
-            if (response.ok) {
-                const loans = await response.json();
-                setSelectedUserLoans(loans);
-                setSelectedUserName(`${firstName} ${lastName}`);
-                setSelectedUserId(userId);
+
+            if (!response.ok) {
+                throw new Error('Nepodařilo se načíst výpůjčky.');
             }
-        } catch (err) {
-            console.error(err);
+
+            const data: Loan[] = await response.json();
+            setLoans(data);
+        } catch (error) {
+            console.error('Chyba při načítání výpůjček:', error);
+            setLoans([]);
         }
     };
 
-    const handleReturnBook = async (bookId: number) => {
-        const response = await fetch(`http://localhost:8080/api/books/${bookId}/loan/return`, {
-            method: 'POST'
-        });
-        if (response.ok && selectedUserId) {
-            const loan: Loan = await response.json();
-            if (loan.fineAmount && loan.fineAmount > 0) {
-                alert(`Kniha vrácena! Pokuta za pozdní vrácení: ${loan.fineAmount} Kč`);
-            } else {
-                alert('Kniha úspěšně vrácena!');
+    const handleShowLoans = (user: User) => {
+        setSelectedUser(user);
+        fetchLoans(user.id);
+    };
+
+    const handleReturnLoan = async (loanId: number) => {
+        try {
+            const response = await fetch(`http://localhost:8080/api/loans/${loanId}/return`, {
+                method: 'POST'
+            });
+
+            if (!response.ok) {
+                throw new Error('Nepodařilo se vrátit knihu.');
             }
-            handleShowLoans(selectedUserId, selectedUserName.split(' ')[0], selectedUserName.split(' ')[1]);
+
+            const message = await response.text();
+            alert(message || 'Kniha byla vrácena.');
+
+            if (selectedUser) {
+                fetchLoans(selectedUser.id);
+            }
+        } catch (error) {
+            console.error('Chyba při vrácení knihy:', error);
+            alert('Knihu se nepodařilo vrátit.');
         }
     };
+
+    const isOverdue = (loan: Loan) => {
+        if (!loan.dueDate || loan.returnDate) {
+            return false;
+        }
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const dueDate = new Date(loan.dueDate);
+        dueDate.setHours(0, 0, 0, 0);
+
+        return dueDate < today;
+    };
+
+    const formatDate = (date?: string | null) => {
+        if (!date) {
+            return '-';
+        }
+
+        return date.substring(0, 10);
+    };
+
+    const visibleUsers = isAdmin
+        ? users
+        : users.filter(user => user.id === currentUser.id);
 
     return (
         <Box sx={{ p: 2 }}>
-            <Typography variant="h4" gutterBottom sx={{ fontWeight: 'bold', color: '#5D4037' }}>
+            <Typography
+                variant="h4"
+                gutterBottom
+                sx={{
+                    fontWeight: 'bold',
+                    color: '#5D4037'
+                }}
+            >
                 Správa čtenářů
             </Typography>
 
-            <TableContainer component={Paper} sx={{ mb: 4, boxShadow: 3 }}>
+            <TableContainer component={Paper} sx={{ boxShadow: 3, mb: 4 }}>
                 <Table>
                     <TableHead sx={{ backgroundColor: '#D7CCC8' }}>
                         <TableRow>
-                            <TableCell><strong>Jméno</strong></TableCell>
-                            <TableCell><strong>Příjmení</strong></TableCell>
-                            <TableCell><strong>Email</strong></TableCell>
-                            <TableCell align="center"><strong>Akce</strong></TableCell>
+                            <TableCell>
+                                <strong>Jméno</strong>
+                            </TableCell>
+
+                            <TableCell>
+                                <strong>Příjmení</strong>
+                            </TableCell>
+
+                            {isAdmin && (
+                                <TableCell>
+                                    <strong>Email</strong>
+                                </TableCell>
+                            )}
+
+                            <TableCell align="center">
+                                <strong>Akce</strong>
+                            </TableCell>
                         </TableRow>
                     </TableHead>
+
                     <TableBody>
-                        {users.map((user) => (
+                        {visibleUsers.map(user => (
                             <TableRow key={user.id} hover>
                                 <TableCell>{user.firstName}</TableCell>
                                 <TableCell>{user.lastName}</TableCell>
-                                <TableCell>{user.email}</TableCell>
+
+                                {isAdmin && (
+                                    <TableCell>{user.email || '-'}</TableCell>
+                                )}
+
                                 <TableCell align="center">
                                     <Button
                                         variant="contained"
                                         size="small"
-                                        sx={{ backgroundColor: '#5D4037', '&:hover': { backgroundColor: '#4E342E' } }}
-                                        onClick={() => handleShowLoans(user.id, user.firstName, user.lastName)}
+                                        sx={{
+                                            backgroundColor: '#5D4037',
+                                            '&:hover': {
+                                                backgroundColor: '#4E342E'
+                                            }
+                                        }}
+                                        onClick={() => handleShowLoans(user)}
                                     >
                                         Zobraz výpůjčky
                                     </Button>
@@ -108,60 +207,128 @@ const Users = () => {
                 </Table>
             </TableContainer>
 
-            {selectedUserName && (
-                <Box sx={{ mt: 4, p: 2, borderTop: '2px solid #5D4037', backgroundColor: '#FDFCF6' }}>
-                    <Typography variant="h5" gutterBottom sx={{ color: '#5D4037' }}>
-                        Výpůjčky: <strong>{selectedUserName}</strong>
+            {selectedUser && (
+                <Box
+                    sx={{
+                        mt: 3,
+                        p: 2,
+                        backgroundColor: '#FDFCF6',
+                        borderTop: '2px solid #5D4037'
+                    }}
+                >
+                    <Typography
+                        variant="h5"
+                        gutterBottom
+                        sx={{
+                            color: '#5D4037',
+                            fontWeight: 'bold'
+                        }}
+                    >
+                        Výpůjčky: {selectedUser.firstName} {selectedUser.lastName}
                     </Typography>
 
-                    {selectedUserLoans.filter(l => !l.returnDate).length > 0 ? (
-                        <TableContainer component={Paper} sx={{ maxWidth: 800, boxShadow: 2 }}>
-                            <Table size="small">
+                    {loans.length === 0 ? (
+                        <Typography>
+                            Tento čtenář nemá žádné výpůjčky.
+                        </Typography>
+                    ) : (
+                        <TableContainer component={Paper} sx={{ boxShadow: 2 }}>
+                            <Table>
                                 <TableHead sx={{ backgroundColor: '#EFEBE9' }}>
                                     <TableRow>
-                                        <TableCell><strong>Kniha</strong></TableCell>
-                                        <TableCell><strong>Půjčeno</strong></TableCell>
-                                        <TableCell><strong>Vrátit do</strong></TableCell>
-                                        <TableCell><strong>Stav</strong></TableCell>
-                                        <TableCell align="right"><strong>Akce</strong></TableCell>
+                                        <TableCell>
+                                            <strong>Kniha</strong>
+                                        </TableCell>
+
+                                        <TableCell>
+                                            <strong>Půjčeno</strong>
+                                        </TableCell>
+
+                                        <TableCell>
+                                            <strong>Vrátit do</strong>
+                                        </TableCell>
+
+                                        <TableCell>
+                                            <strong>Stav</strong>
+                                        </TableCell>
+
+                                        <TableCell>
+                                            <strong>Pokuta</strong>
+                                        </TableCell>
+
+                                        <TableCell align="center">
+                                            <strong>Akce</strong>
+                                        </TableCell>
                                     </TableRow>
                                 </TableHead>
+
                                 <TableBody>
-                                    {selectedUserLoans
-                                        .filter(l => !l.returnDate)
-                                        .map((loan) => (
-                                            <TableRow key={loan.id}>
-                                                <TableCell>{loan.book.title}</TableCell>
-                                                <TableCell>{loan.loanDate}</TableCell>
-                                                <TableCell>{loan.dueDate}</TableCell>
-                                                <TableCell>
-                                                    {new Date(loan.dueDate) < new Date()
-                                                        ? <Chip label="PO TERMÍNU" color="error" size="small" />
-                                                        : <Chip label="V pořádku" color="success" size="small" />
-                                                    }
-                                                </TableCell>
-                                                <TableCell align="right">
-                                                    <Button
+                                    {loans.map(loan => (
+                                        <TableRow key={loan.id} hover>
+                                            <TableCell>
+                                                {loan.book?.title || 'Neznámá kniha'}
+                                            </TableCell>
+
+                                            <TableCell>
+                                                {formatDate(loan.loanDate)}
+                                            </TableCell>
+
+                                            <TableCell>
+                                                {formatDate(loan.dueDate)}
+                                            </TableCell>
+
+                                            <TableCell>
+                                                {loan.returnDate ? (
+                                                    <Chip
+                                                        label="Vráceno"
+                                                        color="default"
                                                         size="small"
+                                                    />
+                                                ) : isOverdue(loan) ? (
+                                                    <Chip
+                                                        label="PO TERMÍNU"
+                                                        color="error"
+                                                        size="small"
+                                                    />
+                                                ) : (
+                                                    <Chip
+                                                        label="V pořádku"
+                                                        color="success"
+                                                        size="small"
+                                                    />
+                                                )}
+                                            </TableCell>
+
+                                            <TableCell>
+                                                {loan.fineAmount && loan.fineAmount > 0
+                                                    ? `${loan.fineAmount} Kč`
+                                                    : '-'}
+                                            </TableCell>
+
+                                            <TableCell align="center">
+                                                {!loan.returnDate ? (
+                                                    <Button
                                                         variant="outlined"
-                                                        color="secondary"
-                                                        onClick={() => handleReturnBook(loan.book.id)}
+                                                        size="small"
+                                                        color={isOverdue(loan) ? 'error' : 'secondary'}
+                                                        onClick={() => handleReturnLoan(loan.id)}
                                                     >
                                                         Vrátit
                                                     </Button>
-                                                </TableCell>
-                                            </TableRow>
-                                        ))}
+                                                ) : (
+                                                    <span>-</span>
+                                                )}
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
                                 </TableBody>
                             </Table>
                         </TableContainer>
-                    ) : (
-                        <Typography sx={{ fontStyle: 'italic' }}>Tento člověk nemá nic půjčeného.</Typography>
                     )}
                 </Box>
             )}
         </Box>
     );
-};
+}
 
 export default Users;
